@@ -1,4 +1,4 @@
-name: '🏷️ Gemini Automated Issue Triage'
+name: 'Copy of Gemini Action'
 
 on:
   issues:
