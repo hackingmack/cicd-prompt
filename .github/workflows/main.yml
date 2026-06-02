@@ -72,7 +72,7 @@ jobs:
           from google import genai
           from google.genai import types
 
-          api_key = os.getenv("GEMINI_API_KEY")
+          api_key = os.getenv("KEY")
           client = genai.Client(api_key=api_key)
 
           issue_title = os.getenv("ISSUE_TITLE", "")
