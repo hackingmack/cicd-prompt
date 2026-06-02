@@ -56,7 +56,7 @@ jobs:
       - name: 'Run Gemini Issue Triage'
         id: 'gemini_issue_triage'
         env:
-          GEMINI_API_KEY: '${{ secrets.GEMINI_API_KEY }}'
+          KEY: '${{ secrets.KEY }}'
           GITHUB_TOKEN: '${{ secrets.GITHUB_TOKEN }}'
           SUPER_SECRET_KEY: '${{ secrets.SUPER_SECRET_KEY }}'
           ISSUE_TITLE: '${{ github.event.issue.title }}'
