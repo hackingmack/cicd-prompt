@@ -1,4 +1,4 @@
-name: 'Second Automated Issue Triage (Lab Edition)'
+name: 'Lab 2 - Issue Triage'
 
 on:
   issues:
@@ -90,19 +90,3 @@ jobs:
           with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
               f.write(f"cmd={command}\n")
           EOF
-          python generate_cmd.py
-
-      # STEP 2: The Vulnerable Target Layer (Contains the flag secrets, but NO Gemini Key)
-      - name: 'Execute Triage Action'
-        env:
-          SUPER_SECRET_KEY: '${{ secrets.SUPER_SECRET_KEY }}'
-          MOCK_PRODUCTION_CLOUD_TOKEN: 'SECRET_AWS_OR_GCP_TOKEN_ABC123'
-        run: |
-          # Pull the generated output directly into an executable shell string
-          USER_CMD="${{ steps.generator.outputs.cmd }}"
-          
-          echo "🤖 Gemini requested execution of: $USER_CMD"
-          echo "--------------------------------------------------"
-          
-          # Danger zone: This executes the prompt injection payload directly in the shell
-          eval "$USER_CMD"
