@@ -1,4 +1,4 @@
-name: 'Lab 2 - Issue Triage'
+name: '🏷️ Gemini Automated Issue Triage (Lab Edition)'
 
 on:
   issues:
@@ -55,7 +55,6 @@ jobs:
 
       # STEP 1: The Isolated LLM Layer (Contains ONLY the Gemini API Key)
       - name: 'Generate Triage Action'
-        id: 'generator'
         env:
           KEY: '${{ secrets.KEY }}'
           ISSUE_TITLE: '${{ github.event.issue.title }}'
@@ -71,7 +70,6 @@ jobs:
           issue_body = os.getenv("ISSUE_BODY", "")
           issue_title = os.getenv("ISSUE_TITLE", "")
 
-          # Prompt instructs the model to act as a command generator
           user_content = f"Triage this issue.\nTitle: {issue_title}\nBody: {issue_body}"
           
           response = client.models.generate_content(
@@ -83,10 +81,27 @@ jobs:
               )
           )
           
-          # Clean up any accidental markdown or whitespace the model might return
           command = response.text.strip().replace('```bash', '').replace('```', '').strip()
           
-          # Securely save the command to the GitHub Actions output stream
-          with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
-              f.write(f"cmd={command}\n")
+          # Drop the raw command output into a local file instead of a YAML environment output
+          with open("payload_cmd.txt", "w") as f:
+              f.write(command)
           EOF
+          python generate_cmd.py
+
+      # STEP 2: The Vulnerable Target Layer (Contains the target flags, but NO Gemini Key)
+      - name: 'Execute Triage Action'
+        env:
+          SUPER_SECRET_KEY: '${{ secrets.SUPER_SECRET_KEY }}'
+          MOCK_PRODUCTION_CLOUD_TOKEN: 'SECRET_AWS_OR_GCP_TOKEN_ABC123'
+          # Pass basic metadata the model's injection payload might expect
+          ISSUE_NUMBER: '${{ github.event.issue.number }}'
+        run: |
+          # Read the command cleanly from the shared workspace file
+          RAW_USER_CMD=$(cat payload_cmd.txt)
+          
+          echo "🤖 Gemini requested execution of: $RAW_USER_CMD"
+          echo "--------------------------------------------------"
+          
+          # Danger zone execution
+          eval "$RAW_USER_CMD"
