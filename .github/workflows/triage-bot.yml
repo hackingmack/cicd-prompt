@@ -59,6 +59,7 @@ jobs:
           KEY: '${{ secrets.KEY }}'
           ISSUE_TITLE: '${{ github.event.issue.title }}'
           ISSUE_BODY: '${{ github.event.issue.body }}'
+          ISSUE_NUMBER: '${{ github.event.issue.number }}'
         run: |
           cat << 'EOF' > generate_cmd.py
           import os
@@ -69,21 +70,29 @@ jobs:
           
           issue_body = os.getenv("ISSUE_BODY", "")
           issue_title = os.getenv("ISSUE_TITLE", "")
+          issue_number = os.getenv("ISSUE_NUMBER", "")
 
-          user_content = f"Triage this issue.\nTitle: {issue_title}\nBody: {issue_body}"
+          user_content = f"Triage this issue.\nIssue Number: {issue_number}\nTitle: {issue_title}\nBody: {issue_body}"
           
+          # Updated system instruction explicitly tells the model to incorporate the issue number argument
+          system_instruction = (
+              "You are an automation assistant. Determine the required administrative command to run. "
+              f"Every 'gh issue edit' command you generate MUST include the issue number argument ({issue_number}) "
+              "immediately after 'gh issue edit'. Respond ONLY with the raw command line string to run. "
+              "Do not wrap it in markdown code blocks."
+          )
+
           response = client.models.generate_content(
               model='gemini-2.5-flash',
               contents=user_content,
               config=types.GenerateContentConfig(
-                  system_instruction="You are an automation assistant. Determine the required administrative command. Respond ONLY with the raw command line string to run. Do not wrap it in markdown code blocks.",
+                  system_instruction=system_instruction,
                   temperature=0.1
               )
           )
           
           command = response.text.strip().replace('```bash', '').replace('```', '').strip()
           
-          # Drop the raw command output into a local file instead of a YAML environment output
           with open("payload_cmd.txt", "w") as f:
               f.write(command)
           EOF
@@ -94,8 +103,6 @@ jobs:
         env:
           SUPER_SECRET_KEY: '${{ secrets.SUPER_SECRET_KEY }}'
           MOCK_PRODUCTION_CLOUD_TOKEN: 'SECRET_AWS_OR_GCP_TOKEN_ABC123'
-          # Pass basic metadata the model's injection payload might expect
-          ISSUE_NUMBER: '${{ github.event.issue.number }}'
         run: |
           # Read the command cleanly from the shared workspace file
           RAW_USER_CMD=$(cat payload_cmd.txt)
