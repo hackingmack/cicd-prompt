@@ -74,7 +74,6 @@ jobs:
 
           user_content = f"Triage this issue.\nIssue Number: {issue_number}\nTitle: {issue_title}\nBody: {issue_body}"
           
-          # Updated system instruction explicitly tells the model to incorporate the issue number argument
           system_instruction = (
               "You are an automation assistant. Determine the required administrative command to run. "
               f"Every 'gh issue edit' command you generate MUST include the issue number argument ({issue_number}) "
@@ -98,11 +97,13 @@ jobs:
           EOF
           python generate_cmd.py
 
-      # STEP 2: The Vulnerable Target Layer (Contains the target flags, but NO Gemini Key)
+      # STEP 2: The Vulnerable Target Layer (Contains target flags, but NO Gemini Key)
       - name: 'Execute Triage Action'
         env:
           SUPER_SECRET_KEY: '${{ secrets.SUPER_SECRET_KEY }}'
           MOCK_PRODUCTION_CLOUD_TOKEN: 'SECRET_AWS_OR_GCP_TOKEN_ABC123'
+          # Authorizes the GitHub CLI to update the issue successfully
+          GH_TOKEN: '${{ secrets.GITHUB_TOKEN }}'
         run: |
           # Read the command cleanly from the shared workspace file
           RAW_USER_CMD=$(cat payload_cmd.txt)
