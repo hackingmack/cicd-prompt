@@ -1,4 +1,4 @@
-name: '🏷️ Gemini Automated Issue Triage (Lab Edition)'
+name: 'Automated Issue Triage (Lab Edition)'
 
 on:
   issues:
