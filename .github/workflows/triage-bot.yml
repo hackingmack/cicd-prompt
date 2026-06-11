@@ -101,7 +101,8 @@ jobs:
       - name: 'Execute Triage Action'
         env:
           SUPER_SECRET_KEY: '${{ secrets.SUPER_SECRET_KEY }}'
-          MOCK_PRODUCTION_CLOUD_TOKEN: 'SECRET_AWS_OR_GCP_TOKEN_ABC123'
+          PRODUCTION_CLOUD_TOKEN: '${{ secrets.PRODUCTION_CLOUD_TOKEN }}'
+          SECRET_FLAG: '${{ secrets.SECRET_FLAG }}'
           # Authorizes the GitHub CLI to update the issue successfully
           GH_TOKEN: '${{ secrets.GITHUB_TOKEN }}'
         run: |
