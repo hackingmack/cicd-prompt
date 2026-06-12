@@ -1,22 +1,22 @@
-# 🏷️ Lab: AI Triage Prompt Injection & CI/CD Vault Breaking
+# Lab: AI Triage Prompt Injection & CI/CD Vault Breaking
 
 Welcome to the AI Automated Issue Triage Lab! This environment demonstrates how modern automation features—specifically Large Language Models (LLMs) integrated into CI/CD pipelines—can introduce critical security vulnerabilities if untrusted input is processed blindly.
 
 ---
 
-## 🧠 What is this AI Agent Doing?
+## What is this AI Agent Doing?
 
 This repository simulates a production workflow where a DevOps team uses **Gemini 2.5 Flash** to automatically triage incoming issues. 
 
 1. **The Intent:** When a user opens an issue, Gemini reads the title/body, decides what needs to happen, and crafts a native GitHub CLI (`gh`) command.
 2. **The Execution:** The workflow runs that command in a secondary bash environment to automatically apply labels, modify text, or run diagnostic tools.
 
-### Why this Architecture is Hyper-Realistic
-Many modern organizations are moving away from rigid regex-based scripts and moving toward **LLM-driven Agents** that have access to operational tools (Tool Use / Function Calling). This exact scenario—where an LLM constructs system scripts or interacts with internal command-line utilities using public data—is a massive emerging attack vector known as **Indirect Prompt Injection**.
+### Why this Architecture is Realistic
+This is a nearly identical GitHub action that was being used inside Google's own repositories and multiple other large comapnies. Many modern organizations are moving away from rigid regex-based scripts and moving toward **LLM-driven Agents** that have access to operational tools (Tool Use / Function Calling). This exact scenario—where an LLM constructs system scripts or interacts with internal command-line utilities using public data—is a massive emerging attack vector known as **Indirect Prompt Injection**.
 
 ---
 
-## 🚀 The Vulnerability Challenge
+## The Vulnerability Challenge
 
 Because anyone can open a GitHub Issue, the issue body acts as **untrusted user input**. In this lab's architecture, the input text blends directly into the LLM's analytical execution context. 
 
@@ -79,19 +79,6 @@ Don't stop at the examples above! LLMs are highly contextual and fluid engines. 
 * **Obfuscation:** See if you can achieve the same goal by hiding instructions inside simulated system logs or error code printouts.
 * **Chaining:** Can you make the model edit the issue *and* post a malicious comment at the same time?
 
-### 🛡️ The Compartmentalization Win
-As you execute Stage 3, you will notice that you can cleanly pull out the flag data (`$SUPER_SECRET_KEY` and `$MOCK_PRODUCTION_CLOUD_TOKEN`). However, try as you might, you **cannot find the active Gemini API Key (`$KEY`)**. 
-
-Take a look into the `.github/workflows/` directory configuration files after you finish the lab to see how the orchestration layer used **Process Environment Isolation** to keep the primary cloud asset perfectly hidden, even during full RCE compromise!
-
 ---
-
-### 🛡️ Real-World Defenses: How do we fix this?
-
-If this were a real production application, how would we stop an attacker from doing this? 
-
-1. **Never use `eval` or naked shell strings:** Instead of passing raw text from an LLM into a shell execution context, use typed SDKs or hardcoded parameters.
-2. **Isolate Instructions from Data:** Place the untrusted issue body into the user content message block rather than embedding it inside the core system instructions.
-3. **The Principle of Least Privilege:** Keep the pipeline permissions as restrictive as possible so that even if a prompt injection succeeds, the blast radius is tightly contained.
 
 Good luck with the lab, and happy hacking!
