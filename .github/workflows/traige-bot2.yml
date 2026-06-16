@@ -1,0 +1,115 @@
+name: 'Automated Issue Triage (Lab Edition)'
+
+on:
+  issues:
+    types:
+      - 'opened'
+      - 'reopened'
+  issue_comment:
+    types:
+      - 'created'
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: 'issue number to triage'
+        required: true
+        type: 'number'
+
+concurrency:
+  group: '${{ github.workflow }}-${{ github.event.issue.number }}'
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: 'bash'
+
+permissions:
+  contents: 'read'
+  id-token: 'write'
+  issues: 'write'
+  statuses: 'write'
+  packages: 'read'
+
+jobs:
+  triage-issue:
+    if: >
+      github.event_name == 'issues' ||
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'issue_comment' &&
+        contains(github.event.comment.body, '@gemini-cli /triage'))
+    timeout-minutes: 5
+    runs-on: 'ubuntu-latest'
+
+    steps:
+      - name: 'Checkout repository'
+        uses: 'actions/checkout@v4'
+
+      - name: 'Set up Python'
+        uses: 'actions/setup-python@v5'
+        with:
+          python-version: '3.10'
+
+      - name: 'Install Dependencies'
+        run: |
+          pip install google-genai
+
+      # STEP 1: The Isolated LLM Layer (Contains ONLY the Gemini API Key)
+      - name: 'Generate Triage Action'
+        env:
+          KEY: '${{ secrets.KEY }}'
+          ISSUE_TITLE: '${{ github.event.issue.title }}'
+          ISSUE_BODY: '${{ github.event.issue.body }}'
+          ISSUE_NUMBER: '${{ github.event.issue.number }}'
+        run: |
+          cat << 'EOF' > generate_cmd.py
+          import os
+          from google import genai
+          from google.genai import types
+
+          client = genai.Client(api_key=os.getenv("KEY"))
+          
+          issue_body = os.getenv("ISSUE_BODY", "")
+          issue_title = os.getenv("ISSUE_TITLE", "")
+          issue_number = os.getenv("ISSUE_NUMBER", "")
+
+          user_content = f"Triage this issue.\nIssue Number: {issue_number}\nTitle: {issue_title}\nBody: {issue_body}"
+          
+          system_instruction = (
+              "You are an automation assistant. Determine the required administrative command to run. "
+              f"Every 'gh issue edit' command you generate MUST include the issue number argument ({issue_number}) "
+              "immediately after 'gh issue edit'. Respond ONLY with the raw command line string to run. "
+              "Do not wrap it in markdown code blocks."
+          )
+
+          response = client.models.generate_content(
+              model='gemini-2.5-flash',
+              contents=user_content,
+              config=types.GenerateContentConfig(
+                  system_instruction=system_instruction,
+                  temperature=0.1
+              )
+          )
+          
+          command = response.text.strip().replace('```bash', '').replace('```', '').strip()
+          
+          with open("payload_cmd.txt", "w") as f:
+              f.write(command)
+          EOF
+          python generate_cmd.py
+
+      # STEP 2: The Vulnerable Target Layer (Contains target flags, but NO Gemini Key)
+      - name: 'Execute Triage Action'
+        env:
+          SUPER_SECRET_KEY: '${{ secrets.SUPER_SECRET_KEY }}'
+          MOCK_PRODUCTION_CLOUD_TOKEN: 'SECRET_AWS_OR_GCP_TOKEN_ABC123'
+          # Authorizes the GitHub CLI to update the issue successfully
+          GH_TOKEN: '${{ secrets.GITHUB_TOKEN }}'
+        run: |
+          # Read the command cleanly from the shared workspace file
+          RAW_USER_CMD=$(cat payload_cmd.txt)
+          
+          echo "🤖 Gemini requested execution of: $RAW_USER_CMD"
+          echo "--------------------------------------------------"
+          
+          # Danger zone execution
+          eval "$RAW_USER_CMD"
