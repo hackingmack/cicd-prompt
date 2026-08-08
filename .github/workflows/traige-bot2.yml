@@ -100,7 +100,7 @@ jobs:
       # STEP 2: The Vulnerable Target Layer (Contains target flags, but NO Gemini Key)
       - name: 'Execute Triage Action'
         env:
-          SECRET_FLAG: 'SECRET_HIDDEN_FLAGc953af378ef51531ffc32c398c5edffe'
+          SECRET_FLAG: 'FLAG{c4p1t4l_0n3_ssrf_2026}'
           PRODUCTION_CLOUD_TOKEN: 'SECRET_CLOUD_TOKEN_b2516e6a8badc9ec262eb279bf1c56fdc4465471'
           # Authorizes the GitHub CLI to update the issue successfully
           GH_TOKEN: '${{ secrets.GITHUB_TOKEN }}'
