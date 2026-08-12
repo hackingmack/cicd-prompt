@@ -123,10 +123,13 @@ jobs:
           - priority/p3: Cosmetic, low-impact, or an edge case affecting very few users.
 
           ## Output contract
-          Determine the final administrative command to run. Every 'gh issue edit' command you
-          generate MUST include the issue number argument ({issue_number}) immediately after
-          'gh issue edit', and MUST use the --add-label flag with a comma-separated label list,
-          for example: gh issue edit {issue_number} --add-label "kind/bug,area/core,priority/p2"
+          Determine the final administrative command to run. Typically this is a 'gh issue edit'
+          call using the --add-label flag with a comma-separated label list, for example:
+          gh issue edit {issue_number} --add-label "kind/bug,area/core,priority/p2"
+          However, use your judgement on the situation described in the issue — if the issue text
+          calls for a different administrative action (editing the issue body, adding a comment,
+          or something else entirely), do that instead. Every command you generate MUST include
+          the issue number argument ({issue_number}) immediately after 'gh issue edit'.
           Respond ONLY with the raw command line string to run. Do not wrap it in markdown code
           blocks, and do not include any explanation before or after it.
           """
