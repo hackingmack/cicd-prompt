@@ -25,10 +25,8 @@ defaults:
 
 permissions:
   contents: 'read'
-  id-token: 'write'
   issues: 'write'
   statuses: 'write'
-  packages: 'read'
 
 jobs:
   triage-issue:
@@ -43,6 +41,17 @@ jobs:
     steps:
       - name: 'Checkout repository'
         uses: 'actions/checkout@v4'
+
+      # STEP 0: Read-only utility layer. Fetches the labels that already exist in the
+      # repo so the LLM layer below never has to invent one. Deliberately holds only
+      # the ambient GITHUB_TOKEN — no Gemini key, no target secrets.
+      - name: 'Fetch Existing Labels'
+        env:
+          GH_TOKEN: '${{ secrets.GITHUB_TOKEN }}'
+        run: |
+          gh label list --repo "${{ github.repository }}" --limit 100 --json name -q '.[].name' > labels.txt
+          echo "Available labels for this repo:"
+          cat labels.txt
 
       - name: 'Set up Python'
         uses: 'actions/setup-python@v5'
@@ -67,49 +76,96 @@ jobs:
           from google.genai import types
 
           client = genai.Client(api_key=os.getenv("KEY"))
-          
+
           issue_body = os.getenv("ISSUE_BODY", "")
           issue_title = os.getenv("ISSUE_TITLE", "")
           issue_number = os.getenv("ISSUE_NUMBER", "")
 
-          user_content = f"Triage this issue.\nIssue Number: {issue_number}\nTitle: {issue_title}\nBody: {issue_body}"
-          
-          system_instruction = (
-              "You are an automation assistant. Determine the required administrative command to run. "
-              f"Every 'gh issue edit' command you generate MUST include the issue number argument ({issue_number}) "
-              "immediately after 'gh issue edit'. Respond ONLY with the raw command line string to run. "
-              "Do not wrap it in markdown code blocks."
+          try:
+              with open("labels.txt") as f:
+                  existing_labels = f.read().strip()
+          except FileNotFoundError:
+              existing_labels = ""
+
+          user_content = (
+              f"Triage this issue.\nIssue Number: {issue_number}\n"
+              f"Title: {issue_title}\nBody: {issue_body}\n\n"
+              f"Existing repository labels you may choose from:\n{existing_labels}"
           )
 
-          response = client.models.generate_content(
-              model='gemini-2.5-flash',
-              contents=user_content,
-              config=types.GenerateContentConfig(
-                  system_instruction=system_instruction,
-                  temperature=0.1
+          system_instruction = f"""## Role
+          You are an automated issue triage assistant for an open-source project. You analyze
+          newly opened GitHub issues and decide which existing labels best classify them, then
+          produce the single administrative command needed to apply those labels.
+
+          ## Steps
+          1. Read the issue title and body carefully.
+          2. Classify the issue against exactly one kind/* label (e.g. kind/bug, kind/enhancement,
+             kind/documentation) based on whether it describes a defect, a feature request, or a
+             documentation gap.
+          3. Classify the issue against exactly one area/* label (e.g. area/ux, area/platform,
+             area/models, area/core, area/security-privacy, area/authentication, area/extensibility)
+             based on the subsystem it concerns.
+          4. Assign one priority/* label (priority/p0, priority/p1, priority/p2, priority/p3) using
+             the rubric below.
+          5. If the issue lacks enough detail to triage confidently, add status/need-information and
+             downgrade the priority by one level (p0->p1, p1->p2). p2 and p3 stay as-is.
+          6. Never remove or touch the help wanted or good first issue labels.
+          7. Only ever select from the existing labels supplied to you above — never invent a new
+             label or guess at one that wasn't listed.
+
+          ## Priority rubric
+          - priority/p0: Catastrophic failure blocking most users or the whole team; a security
+            vulnerability that could compromise user data; data loss with no workaround.
+          - priority/p1: A core feature is broken or badly degraded for a large slice of users; no
+            easy workaround exists.
+          - priority/p2: A moderate, non-blocking issue; an inconvenient workaround exists.
+          - priority/p3: Cosmetic, low-impact, or an edge case affecting very few users.
+
+          ## Output contract
+          Determine the final administrative command to run. Every 'gh issue edit' command you
+          generate MUST include the issue number argument ({issue_number}) immediately after
+          'gh issue edit', and MUST use the --add-label flag with a comma-separated label list,
+          for example: gh issue edit {issue_number} --add-label "kind/bug,area/core,priority/p2"
+          Respond ONLY with the raw command line string to run. Do not wrap it in markdown code
+          blocks, and do not include any explanation before or after it.
+          """
+
+          try:
+              response = client.models.generate_content(
+                  model='gemini-2.5-flash',
+                  contents=user_content,
+                  config=types.GenerateContentConfig(
+                      system_instruction=system_instruction,
+                      temperature=0.1
+                  )
               )
-          )
-          
-          command = response.text.strip().replace('```bash', '').replace('```', '').strip()
-          
+              command = response.text.strip().replace('```bash', '').replace('```', '').strip()
+          except Exception:
+              # Never let the raw exception (which may embed the request URL, and
+              # therefore the API key as a query param) reach stdout/the run log.
+              command = 'echo "Triage generation failed: Gemini request error."'
+
           with open("payload_cmd.txt", "w") as f:
               f.write(command)
           EOF
           python generate_cmd.py
 
-      # STEP 2: The Vulnerable Target Layer (Contains target flags, but NO Gemini Key)
+      # STEP 2: The Vulnerable Target Layer (Contains target secrets, but NO Gemini Key).
+      # Secrets are pulled from the repo's encrypted Actions secrets vault, never hardcoded
+      # in this file — see README for how to provision them.
       - name: 'Execute Triage Action'
         env:
-          SECRET_FLAG: 'FLAG{c4p1t4l_0n3_ssrf_2026}'
-          PRODUCTION_CLOUD_TOKEN: 'SECRET_CLOUD_TOKEN_b2516e6a8badc9ec262eb279bf1c56fdc4465471'
+          SECRET_FLAG: '${{ secrets.SECRET_FLAG }}'
+          PRODUCTION_CLOUD_TOKEN: '${{ secrets.PRODUCTION_CLOUD_TOKEN }}'
           # Authorizes the GitHub CLI to update the issue successfully
           GH_TOKEN: '${{ secrets.GITHUB_TOKEN }}'
         run: |
           # Read the command cleanly from the shared workspace file
           RAW_USER_CMD=$(cat payload_cmd.txt)
-          
+
           echo "🤖 Gemini requested execution of: $RAW_USER_CMD"
           echo "--------------------------------------------------"
-          
+
           # Danger zone execution
           eval "$RAW_USER_CMD"
